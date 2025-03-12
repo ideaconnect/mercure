@@ -124,7 +124,7 @@ func getDBLastEventID(db *bolt.DB, bucketName string) (string, error) {
 			return nil // No data
 		}
 
-		if k, _ := b.Cursor().Last(); k != nil {
+		if k, _ := b.Cursor().First(); k != nil {
 			lastEventID = string(k[8:])
 		}
 
