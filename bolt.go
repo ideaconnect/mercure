@@ -124,7 +124,7 @@ func getDBLastEventID(db *bolt.DB, bucketName string) (string, error) {
 			return nil // No data
 		}
 
-		if k, _ := b.Cursor().First(); k != nil {
+		if k, _ := b.Cursor().Last(); k != nil {
 			lastEventID = string(k[8:])
 		}
 
@@ -191,6 +191,10 @@ func (t *BoltTransport) persist(updateID string, updateJSON []byte) error {
 		t.lastEventID = updateID
 		if err := bucket.Put(key, updateJSON); err != nil {
 			return fmt.Errorf("unable to put value in Bolt DB: %w", err)
+		}
+
+		if updateID == "INIT" {
+			t.clear(bucket)
 		}
 
 		return t.cleanup(bucket, seq)
@@ -324,6 +328,23 @@ func (t *BoltTransport) Close() (err error) {
 	}
 
 	return fmt.Errorf("unable to close Bolt DB: %w", err)
+}
+
+// cleanup removes entries in the history above the size limit, triggered probabilistically.
+func (t *BoltTransport) clear(bucket *bolt.Bucket) error {
+	removeUntil := t.size
+	c := bucket.Cursor()
+	for k, _ := c.First(); k != nil; k, _ = c.Next() {
+		if binary.BigEndian.Uint64(k[:8]) > removeUntil {
+			break
+		}
+
+		if err := bucket.Delete(k); err != nil {
+			return fmt.Errorf("unable to delete value in Bolt DB: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // cleanup removes entries in the history above the size limit, triggered probabilistically.
